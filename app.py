@@ -10,31 +10,39 @@ st.set_page_config(page_title="Study Planner", layout="wide")
 st.sidebar.title("📚 Smart Study Planner")
 menu = st.sidebar.radio("Go to", ["Dashboard", "Add Session", "Analytics"])
 
-# ---------- LOAD DATA ----------
-df = load_data()
+# ---------- SAFE LOAD DATA ----------
+try:
+    df = load_data()
+except Exception as e:
+    st.error("Error loading data")
+    df = pd.DataFrame(columns=["Name", "Subject", "Hours", "Break"])
 
 # ---------- DASHBOARD ----------
 if menu == "Dashboard":
     st.title("📊 Dashboard")
 
-    if df.empty:
-        st.warning("No data available")
-    else:
-        total_hours = df["Hours"].sum()
-        total_break = df["Break"].sum()
-        total_sessions = len(df)
+    try:
+        if df.empty:
+            st.warning("No data available")
+        else:
+            total_hours = df["Hours"].sum()
+            total_break = df["Break"].sum()
+            total_sessions = len(df)
 
-        col1, col2, col3 = st.columns(3)
+            col1, col2, col3 = st.columns(3)
 
-        col1.metric("Total Study Hours", total_hours)
-        col2.metric("Total Break Time", total_break)
-        col3.metric("Total Sessions", total_sessions)
+            col1.metric("Total Study Hours", total_hours)
+            col2.metric("Total Break Time", total_break)
+            col3.metric("Total Sessions", total_sessions)
 
-        st.divider()
+            st.divider()
 
-        st.subheader("Study Hours by Subject")
-        chart_data = df.groupby("Subject")["Hours"].sum()
-        st.bar_chart(chart_data)
+            st.subheader("Study Hours by Subject")
+            chart_data = df.groupby("Subject")["Hours"].sum()
+            st.bar_chart(chart_data)
+
+    except Exception as e:
+        st.error("Error displaying dashboard")
 
 # ---------- ADD SESSION ----------
 elif menu == "Add Session":
@@ -46,39 +54,59 @@ elif menu == "Add Session":
     break_time = st.number_input("Break Time", min_value=0.0, max_value=5.0)
 
     if st.button("Save Session"):
-        if name and subject:
-            session = StudySession(subject, hours, break_time)
+        try:
+            # Validation
+            if not name or not subject:
+                st.error("Please fill all fields")
 
-            manager = ScheduleManager()
-            manager.add_session(session)
+            elif hours <= 0:
+                st.warning("Study hours must be greater than 0")
 
-            save_data(name, subject, hours, break_time)
+            else:
+                session = StudySession(subject, hours, break_time)
 
-            analyzer = BurnoutAnalyzer()
-            risk = analyzer.analyze(manager.total_study_hours(), manager.total_break_time())
+                manager = ScheduleManager()
+                manager.add_session(session)
 
-            recommender = RecommendationEngine()
-            suggestion = recommender.suggest(risk)
+                # Save data safely
+                try:
+                    save_data(name, subject, hours, break_time)
+                except Exception:
+                    st.error("Error saving data")
 
-            st.success("✅ Session saved successfully!")
-            st.write("### Burnout Risk:", risk)
-            st.info(suggestion)
+                # Analyze burnout
+                analyzer = BurnoutAnalyzer()
+                risk = analyzer.analyze(
+                    manager.total_study_hours(),
+                    manager.total_break_time()
+                )
 
-        else:
-            st.error("Please fill all fields")
+                recommender = RecommendationEngine()
+                suggestion = recommender.suggest(risk)
+
+                st.success("✅ Session saved successfully!")
+                st.write("### Burnout Risk:", risk)
+                st.info(suggestion)
+
+        except Exception as e:
+            st.error("Something went wrong while adding session")
 
 # ---------- ANALYTICS ----------
 elif menu == "Analytics":
     st.title("📊 Analytics")
 
-    if df.empty:
-        st.warning("No data available")
-    else:
-        st.subheader("Study Distribution")
-        st.bar_chart(df.groupby("Subject")["Hours"].sum())
+    try:
+        if df.empty:
+            st.warning("No data available")
+        else:
+            st.subheader("Study Distribution")
+            st.bar_chart(df.groupby("Subject")["Hours"].sum())
 
-        st.subheader("Break Time Analysis")
-        st.line_chart(df.groupby("Subject")["Break"].sum())
+            st.subheader("Break Time Analysis")
+            st.line_chart(df.groupby("Subject")["Break"].sum())
 
-        st.subheader("All Data")
-        st.dataframe(df)
+            st.subheader("All Data")
+            st.dataframe(df)
+
+    except Exception:
+        st.error("Error displaying analytics")
